@@ -1,0 +1,1670 @@
+<!--
+  Personal Finance Manager — single-file web app
+  ===============================================
+  GitHub Pages deployment:
+    1. Create (or use an existing) GitHub repository.
+    2. Place this file at the repository root as index.html.
+    3. Go to repository Settings → Pages.
+    4. Set Source to "Deploy from a branch", choose "main" (or "master"),
+       folder "/ (root)", then click Save.
+    5. Your app will appear at https://<username>.github.io/<repo>/
+
+  All data is stored in your browser's localStorage.
+  No accounts, no servers, no external network requests of any kind.
+  Works fully offline after the first page load.
+-->
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#ffffff" id="meta-theme" />
+  <title>Finance</title>
+  <style>
+    /* ============================================================
+       RESET & CSS CUSTOM PROPERTIES
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:        #6366f1;
+      --accent-h:      #4f52d9;
+      --accent-light:  #818cf8;
+      --accent-dim:    rgba(99,102,241,.1);
+
+      --bg:       #f3f4f6;
+      --surface:  #ffffff;
+      --surface2: #f9fafb;
+      --border:   #e5e7eb;
+
+      --text1: #111827;
+      --text2: #6b7280;
+      --text3: #9ca3af;
+
+      --ok:   #10b981;
+      --bad:  #ef4444;
+      --warn: #f59e0b;
+
+      --r:    12px;
+      --r-sm: 8px;
+      --r-xs: 6px;
+
+      --sb-w:   284px;
+      --nav-h:  58px;
+
+      --sh:  0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+      --sh0: 0 1px 2px rgba(0,0,0,.05);
+      --tr:  150ms ease;
+    }
+
+    [data-theme="dark"] {
+      --bg:       #0d0f14;
+      --surface:  #161923;
+      --surface2: #1c2030;
+      --border:   #2a3045;
+
+      --text1: #f1f5f9;
+      --text2: #94a3b8;
+      --text3: #64748b;
+
+      --sh:  0 1px 3px rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.2);
+      --sh0: 0 1px 2px rgba(0,0,0,.2);
+    }
+
+    /* ============================================================
+       BASE
+    ============================================================ */
+    html { height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+    body {
+      height: 100%;
+      font-family: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+      background: var(--bg);
+      color: var(--text1);
+      font-size: 15px;
+      line-height: 1.5;
+      overscroll-behavior: none;
+    }
+
+    button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+
+    /* Remove number spinners */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input[type="number"] { -moz-appearance: textfield; }
+
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ============================================================
+       APP SHELL
+    ============================================================ */
+    #app {
+      display: flex;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ---- Sidebar ---- */
+    #sidebar {
+      width: var(--sb-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 18px 10px 16px;
+      gap: 3px;
+    }
+
+    /* ---- Main ---- */
+    #main {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding-top: env(safe-area-inset-top);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    #scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .c-inner {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 24px 48px;
+    }
+
+    /* ---- Tab panels ---- */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ---- Bottom nav ---- */
+    #bnav { display: none; }
+
+    /* ============================================================
+       RESPONSIVE — MOBILE
+    ============================================================ */
+    @media (max-width: 767px) {
+      #sidebar { display: none; }
+
+      #main {
+        padding-top: env(safe-area-inset-top);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+
+      #scroll { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
+
+      .c-inner { padding: 14px 14px 24px; max-width: 100%; }
+
+      /* Prevent iOS input zoom — must be ≥ 16px */
+      input[type="text"], input[type="number"], select { font-size: 16px; }
+
+      #bnav {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        z-index: 50;
+      }
+
+      .bn-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: var(--text3);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+        transition: color var(--tr);
+        -webkit-tap-highlight-color: transparent;
+        min-height: 44px;
+        min-width: 44px;
+      }
+
+      .bn-item.active { color: var(--accent); }
+      .bn-item svg { width: 22px; height: 22px; }
+    }
+
+    /* Settings panel only visible on mobile */
+    @media (min-width: 768px) { #tab-settings { display: none !important; } }
+    @media (max-width: 767px) { #tab-settings.active { display: block; } }
+
+    /* Mobile balance card hidden on desktop */
+    @media (min-width: 768px) { .mob-bal { display: none !important; } }
+
+    /* ============================================================
+       SIDEBAR COMPONENTS
+    ============================================================ */
+    .sb-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px 14px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -.3px;
+    }
+
+    .sb-brand svg { width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; }
+
+    .sb-bal-card {
+      background: var(--accent-dim);
+      border-radius: var(--r);
+      padding: 16px 14px 12px;
+      margin-bottom: 4px;
+    }
+
+    .sb-bal-lbl {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 6px;
+    }
+
+    /* Balance hero — shared by sidebar and mobile */
+    .bal-hero {
+      font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      color: var(--text1);
+      background: none;
+      border: none;
+      padding: 0;
+      width: 100%;
+      outline: none;
+      cursor: text;
+      transition: color var(--tr);
+      /* Allow overflow instead of text-overflow to keep it editable */
+      min-width: 0;
+    }
+
+    .bal-hero:focus { color: var(--accent); }
+    .bal-hero::placeholder { color: var(--text3); font-weight: 600; }
+
+    .rem-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0,0,0,.07);
+    }
+
+    [data-theme="dark"] .rem-row { border-top-color: rgba(255,255,255,.07); }
+
+    .rem-lbl { font-size: 11.5px; font-weight: 500; color: var(--text2); }
+
+    .rem-val { font-size: 13px; font-weight: 700; }
+    .c-ok  { color: var(--ok); }
+    .c-bad { color: var(--bad); }
+
+    /* Sidebar nav */
+    .sb-nav { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; }
+
+    .sn-btn {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 10px;
+      border-radius: var(--r-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text2);
+      border: none;
+      background: none;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: all var(--tr);
+    }
+
+    .sn-btn:hover { background: var(--surface2); color: var(--text1); }
+    .sn-btn.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+    .sn-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* Sidebar settings */
+    .sb-cfg {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ============================================================
+       COMMON COMPONENTS
+    ============================================================ */
+
+    /* Section label */
+    .sec-lbl {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      margin-bottom: 9px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px;
+      box-shadow: var(--sh);
+    }
+
+    .card + .card { margin-top: 10px; }
+
+    /* Settings row */
+    .set-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .set-row + .set-row { border-top: 1px solid var(--border); }
+    .set-lbl { font-size: 13px; font-weight: 500; color: var(--text2); }
+
+    /* Toggle switch */
+    .tog {
+      position: relative;
+      width: 42px; height: 22px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .tog input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+    .tog-track {
+      position: absolute; inset: 0;
+      background: var(--border);
+      border-radius: 11px;
+      transition: background var(--tr);
+    }
+
+    .tog-thumb {
+      position: absolute;
+      width: 16px; height: 16px;
+      top: 3px; left: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform var(--tr);
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      pointer-events: none;
+    }
+
+    .tog input:checked ~ .tog-track { background: var(--accent); }
+    .tog input:checked ~ .tog-thumb { transform: translateX(20px); }
+
+    /* Currency select */
+    .cur-sel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xs);
+      padding: 5px 7px;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color var(--tr);
+      cursor: pointer;
+    }
+
+    .cur-sel:focus { border-color: var(--accent); }
+
+    /* Danger button */
+    .dbtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 13px;
+      border: 1.5px solid var(--bad);
+      border-radius: var(--r-xs);
+      background: none;
+      color: var(--bad);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--tr);
+      min-height: 36px;
+    }
+
+    .dbtn:hover { background: var(--bad); color: white; }
+
+    /* Add item button */
+    .add-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      padding: 11px;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--r-sm);
+      background: none;
+      color: var(--text2);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--tr);
+      margin-top: 8px;
+      min-height: 44px;
+    }
+
+    .add-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+    .add-btn svg { width: 16px; height: 16px; }
+
+    /* ============================================================
+       MOBILE BALANCE CARD
+    ============================================================ */
+    .mob-bal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 18px 16px 13px;
+      box-shadow: var(--sh);
+      margin-bottom: 12px;
+    }
+
+    .mob-bal-lbl {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 5px;
+    }
+
+    .mob-bal .bal-hero { font-size: clamp(1.9rem, 8.5vw, 2.6rem); }
+
+    /* ============================================================
+       UPCOMING INCOME STRIP
+    ============================================================ */
+    .up-strip {
+      background: var(--accent);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      color: white;
+      margin-bottom: 12px;
+    }
+
+    .up-eye {
+      font-size: 10px;
+      font-weight: 700;
+      opacity: .75;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 3px;
+    }
+
+    .up-amt { font-size: 1.55rem; font-weight: 800; letter-spacing: -.5px; line-height: 1.1; }
+    .up-sub { font-size: 11.5px; opacity: .8; margin-top: 4px; }
+
+    /* ============================================================
+       ALLOCATION SUMMARY CARDS (Dashboard)
+    ============================================================ */
+    .ac {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 10px 12px;
+      box-shadow: var(--sh0);
+    }
+
+    .ac + .ac { margin-top: 6px; }
+
+    .ac-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .ac-name { font-size: 13px; font-weight: 600; }
+    .ac-amt  { font-size: 13px; font-weight: 700; }
+
+    .bar {
+      height: 4px;
+      background: var(--surface2);
+      border-radius: 2px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 300ms ease;
+    }
+
+    /* ============================================================
+       LIST ITEMS (Income & Allocations)
+    ============================================================ */
+    .li {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 12px;
+      box-shadow: var(--sh0);
+      transition: border-color var(--tr);
+    }
+
+    .li + .li { margin-top: 8px; }
+    .li:focus-within { border-color: var(--accent); }
+
+    .li-hd {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    /* Name input styled as heading */
+    .name-in {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 1.5px solid transparent;
+      padding: 1px 0;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--text1);
+      outline: none;
+      transition: border-color var(--tr);
+      min-width: 0;
+    }
+
+    .name-in:focus { border-bottom-color: var(--accent); }
+    .name-in::placeholder { color: var(--text3); }
+
+    /* Delete button */
+    .delbtn {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text3);
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color var(--tr);
+      min-width: 32px;
+      min-height: 32px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .delbtn:hover { color: var(--bad); }
+    .delbtn svg { width: 15px; height: 15px; }
+
+    /* Two-col fields */
+    .li-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .fgrp { display: flex; flex-direction: column; gap: 4px; }
+
+    .flbl {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    .fin {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xs);
+      padding: 7px 9px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text1);
+      outline: none;
+      transition: border-color var(--tr);
+      width: 100%;
+    }
+
+    .fin:focus { border-color: var(--accent); }
+
+    /* Date chips */
+    .date-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+
+    .dchip {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface2);
+      color: var(--text2);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--tr);
+      min-height: 32px;
+      min-width: 44px;
+      text-align: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .dchip.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+    /* Type toggle */
+    .tt {
+      display: flex;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xs);
+      padding: 2px;
+    }
+
+    .tt-btn {
+      flex: 1;
+      padding: 5px 6px;
+      border-radius: 4px;
+      border: none;
+      background: none;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all var(--tr);
+      white-space: nowrap;
+      min-height: 30px;
+    }
+
+    .tt-btn.on { background: var(--accent); color: white; }
+
+    /* Percent hint */
+    .pct-hint { font-size: 11.5px; color: var(--text2); margin-top: 7px; }
+
+    /* Next payment badge */
+    .pay-badge {
+      display: inline-flex;
+      align-items: center;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+
+    /* ============================================================
+       SUBTOTAL BAR
+    ============================================================ */
+    .sub-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 10px 13px;
+      margin-top: 8px;
+      box-shadow: var(--sh0);
+    }
+
+    .sub-lbl { font-size: 13px; font-weight: 500; color: var(--text2); }
+    .sub-val { font-size: 14.5px; font-weight: 700; }
+
+    /* ============================================================
+       WARNING BANNER
+    ============================================================ */
+    .warn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(245,158,11,.08);
+      border: 1px solid rgba(245,158,11,.25);
+      border-radius: var(--r-sm);
+      padding: 9px 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #b45309;
+      margin-bottom: 12px;
+    }
+
+    [data-theme="dark"] .warn { color: #fbbf24; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
+
+    /* ============================================================
+       EMPTY STATES
+    ============================================================ */
+    .empty { text-align: center; padding: 40px 20px; }
+    .empty-ico { font-size: 2.4rem; margin-bottom: 12px; }
+    .empty-ttl { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .empty-dsc { font-size: 13px; color: var(--text2); line-height: 1.6; }
+
+    /* ============================================================
+       PAGE TITLES
+    ============================================================ */
+    .page-ttl {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 767px) { .page-ttl { display: none; } }
+
+    .tab-ttl {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    @media (max-width: 767px) { .tab-ttl { display: block; } }
+
+    /* ============================================================
+       CONFIRM DIALOG
+    ============================================================ */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--tr);
+    }
+
+    .overlay.open { opacity: 1; pointer-events: auto; }
+
+    .dlg {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+      width: 100%;
+      max-width: 340px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.15);
+    }
+
+    .dlg-ttl { font-size: 15.5px; font-weight: 700; margin-bottom: 7px; }
+    .dlg-dsc { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 18px; }
+
+    .dlg-acts { display: flex; gap: 8px; justify-content: flex-end; }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: var(--r-xs);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity var(--tr);
+      min-height: 36px;
+    }
+
+    .btn:hover { opacity: .85; }
+    .btn-ghost { background: var(--surface2); border: 1px solid var(--border); }
+    .btn-bad   { background: var(--bad); color: white; }
+
+    /* ============================================================
+       SCROLLBAR
+    ============================================================ */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside id="sidebar">
+
+    <div class="sb-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8"/>
+        <line x1="12" y1="6" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="18"/>
+      </svg>
+      Finance
+    </div>
+
+    <!-- Balance -->
+    <div class="sb-bal-card">
+      <div class="sb-bal-lbl">Balance</div>
+      <input id="sb-bal"
+             class="bal-hero"
+             type="text"
+             inputmode="decimal"
+             placeholder="0.00"
+             autocomplete="off"
+             spellcheck="false"
+             aria-label="Current balance" />
+      <div class="rem-row">
+        <span class="rem-lbl">Remaining</span>
+        <span id="sb-rem" class="rem-val c-ok"></span>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="sb-nav">
+      <button class="sn-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Dashboard
+      </button>
+      <button class="sn-btn" data-tab="income" onclick="switchTab('income')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/>
+          <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+        </svg>
+        Income
+      </button>
+      <button class="sn-btn" data-tab="allocations" onclick="switchTab('allocations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        Allocations
+      </button>
+    </nav>
+
+    <!-- Settings -->
+    <div class="sb-cfg">
+      <div class="sec-lbl">Settings</div>
+      <div class="set-row">
+        <span class="set-lbl">Dark mode</span>
+        <label class="tog">
+          <input type="checkbox" id="dm-d" onchange="setDark(this.checked)">
+          <span class="tog-track"></span><span class="tog-thumb"></span>
+        </label>
+      </div>
+      <div class="set-row">
+        <span class="set-lbl">Currency</span>
+        <select class="cur-sel" id="cur-d" onchange="setCur(this.value)">
+          <option value="₱">₱ PHP</option><option value="$">$ USD</option>
+          <option value="€">€ EUR</option><option value="£">£ GBP</option>
+          <option value="¥">¥ JPY</option><option value="A$">A$ AUD</option>
+          <option value="C$">C$ CAD</option><option value="₹">₹ INR</option>
+          <option value="CHF">CHF</option><option value="kr">kr SEK</option>
+          <option value="R">R ZAR</option>
+        </select>
+      </div>
+      <div class="set-row">
+        <button class="dbtn" onclick="openReset()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+          Reset data
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN ==================== -->
+  <main id="main">
+    <div id="scroll">
+      <div class="c-inner">
+
+        <!-- ===== DASHBOARD ===== -->
+        <div class="panel active" data-tab="dashboard" id="tab-dashboard">
+          <div class="tab-ttl">Dashboard</div>
+
+          <!-- Mobile balance hero -->
+          <div class="mob-bal" id="mob-bal-card">
+            <div class="mob-bal-lbl">Balance</div>
+            <input id="mb-bal"
+                   class="bal-hero"
+                   type="text"
+                   inputmode="decimal"
+                   placeholder="0.00"
+                   autocomplete="off"
+                   spellcheck="false"
+                   aria-label="Current balance" />
+            <div class="rem-row">
+              <span class="rem-lbl">Remaining</span>
+              <span id="mb-rem" class="rem-val c-ok"></span>
+            </div>
+          </div>
+
+          <div id="up-container"></div>
+
+          <div class="warn" id="dash-warn" style="display:none">
+            &#9888; Allocations exceed your balance
+          </div>
+
+          <div id="dash-alloc-wrap">
+            <div class="sec-lbl" id="dash-alloc-lbl">Allocations</div>
+            <div id="dash-alloc-list"></div>
+            <div class="empty" id="dash-empty" style="display:none">
+              <div class="empty-ico">📊</div>
+              <div class="empty-ttl">No allocations yet</div>
+              <div class="empty-dsc">Go to Allocations to start organizing your money into buckets.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== INCOME ===== -->
+        <div class="panel" data-tab="income" id="tab-income">
+          <div class="tab-ttl">Income</div>
+          <div class="page-ttl">Income Sources</div>
+          <div id="income-list"></div>
+          <div class="empty" id="income-empty" style="display:none">
+            <div class="empty-ico">💰</div>
+            <div class="empty-ttl">No income sources</div>
+            <div class="empty-dsc">Add your salary, freelance income, or any other regular income stream.</div>
+          </div>
+          <button class="add-btn" onclick="addIncome()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add income source
+          </button>
+        </div>
+
+        <!-- ===== ALLOCATIONS ===== -->
+        <div class="panel" data-tab="allocations" id="tab-allocations">
+          <div class="tab-ttl">Allocations</div>
+          <div class="page-ttl">Budget Allocations</div>
+          <div class="warn" id="alloc-warn" style="display:none">
+            &#9888; Total allocations exceed your balance
+          </div>
+          <div id="alloc-list"></div>
+          <div class="empty" id="alloc-empty" style="display:none">
+            <div class="empty-ico">🪣</div>
+            <div class="empty-ttl">No allocations</div>
+            <div class="empty-dsc">Create buckets like Rent, Savings, or Groceries to track where your money goes.</div>
+          </div>
+          <button class="add-btn" onclick="addAlloc()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add allocation
+          </button>
+          <div class="sub-bar">
+            <span class="sub-lbl">Total allocated</span>
+            <span class="sub-val" id="alloc-sub"></span>
+          </div>
+        </div>
+
+        <!-- ===== SETTINGS (mobile only) ===== -->
+        <div class="panel" data-tab="settings" id="tab-settings">
+          <div class="tab-ttl">Settings</div>
+
+          <div class="card">
+            <div class="sec-lbl">Appearance</div>
+            <div class="set-row">
+              <span class="set-lbl">Dark mode</span>
+              <label class="tog">
+                <input type="checkbox" id="dm-m" onchange="setDark(this.checked)">
+                <span class="tog-track"></span><span class="tog-thumb"></span>
+              </label>
+            </div>
+            <div class="set-row">
+              <span class="set-lbl">Currency symbol</span>
+              <select class="cur-sel" id="cur-m" onchange="setCur(this.value)">
+                <option value="₱">₱ PHP</option><option value="$">$ USD</option>
+                <option value="€">€ EUR</option><option value="£">£ GBP</option>
+                <option value="¥">¥ JPY</option><option value="A$">A$ AUD</option>
+                <option value="C$">C$ CAD</option><option value="₹">₹ INR</option>
+                <option value="CHF">CHF</option><option value="kr">kr SEK</option>
+                <option value="R">R ZAR</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:10px">
+            <div class="sec-lbl">Data</div>
+            <p style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:14px">
+              All your data lives in this browser's localStorage — nothing is sent anywhere.
+              Resetting clears everything permanently.
+            </p>
+            <button class="dbtn" onclick="openReset()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+              Reset all data
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /.c-inner -->
+    </div><!-- /#scroll -->
+  </main>
+
+  <!-- ==================== BOTTOM NAV ==================== -->
+  <nav id="bnav">
+    <button class="bn-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      Dashboard
+    </button>
+    <button class="bn-item" data-tab="income" onclick="switchTab('income')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"/>
+        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+      </svg>
+      Income
+    </button>
+    <button class="bn-item" data-tab="allocations" onclick="switchTab('allocations')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      Allocations
+    </button>
+    <button class="bn-item" data-tab="settings" onclick="switchTab('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+      Settings
+    </button>
+  </nav>
+
+</div><!-- /#app -->
+
+<!-- ==================== DIALOG ==================== -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="dlg">
+    <div class="dlg-ttl">Reset all data?</div>
+    <div class="dlg-dsc">This permanently deletes your balance, all income sources, and all allocations. It cannot be undone.</div>
+    <div class="dlg-acts">
+      <button class="btn btn-ghost" onclick="closeReset()">Cancel</button>
+      <button class="btn btn-bad" onclick="doReset()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   STATE
+================================================================ */
+const KEY = 'pf_v3';
+
+const DFLT = {
+  balance: 0,
+  income:  [],   /* { id, name, amount, dates:[5|15|20] } */
+  allocs:  [],   /* { id, name, type:'fixed'|'pct', value } */
+  cfg:     { cur: '₱', dark: false }
+};
+
+let S = clone(DFLT);
+
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    S = {
+      ...DFLT, ...p,
+      cfg:    { ...DFLT.cfg,   ...(p.cfg    || {}) },
+      income: p.income || [],
+      allocs: p.allocs || [],
+    };
+  } catch(_) {}
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(_) {}
+}
+
+/* ================================================================
+   UTILS
+================================================================ */
+let _n = 0;
+function uid() { return `i${Date.now()}${++_n}`; }
+
+function fmt(n) {
+  const s = S.cfg.cur;
+  const abs = Math.abs(n);
+  const str = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (n < 0 ? '-' : '') + s + str;
+}
+
+function parseN(v) {
+  const s = String(v == null ? '' : v).replace(/[^0-9.]/g, '');
+  const n = parseFloat(s);
+  return (isFinite(n) && n >= 0) ? n : null;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+function totalAlloc() {
+  return S.allocs.reduce((sum, a) => sum + allocAmt(a), 0);
+}
+
+function allocAmt(a) {
+  return a.type === 'pct' ? S.balance * a.value / 100 : a.value;
+}
+
+function rem() { return S.balance - totalAlloc(); }
+
+function nextPay(dates) {
+  if (!dates || !dates.length) return null;
+  const now = new Date();
+  const d = now.getDate(), m = now.getMonth(), y = now.getFullYear();
+  const sorted = [...dates].sort((a, b) => a - b);
+  const next = sorted.find(x => x > d);
+  if (next) return new Date(y, m, next);
+  const nm = m === 11 ? 0 : m + 1;
+  const ny = m === 11 ? y + 1 : y;
+  return new Date(ny, nm, sorted[0]);
+}
+
+function fmtDate(dt) {
+  if (!dt) return '—';
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function daysTo(dt) {
+  if (!dt) return null;
+  const a = new Date(); a.setHours(0,0,0,0);
+  const b = new Date(dt); b.setHours(0,0,0,0);
+  return Math.ceil((b - a) / 86400000);
+}
+
+function upcomingIncome() {
+  if (!S.income.length) return null;
+  let earliestTime = null;
+  S.income.forEach(src => {
+    const nd = nextPay(src.dates || []);
+    if (!nd) return;
+    if (earliestTime === null || nd.getTime() < earliestTime) earliestTime = nd.getTime();
+  });
+  if (earliestTime === null) return null;
+  const srcs = S.income.filter(src => {
+    const nd = nextPay(src.dates || []);
+    return nd && nd.getTime() === earliestTime;
+  });
+  return {
+    date: new Date(earliestTime),
+    total: srcs.reduce((s, src) => s + (src.amount || 0), 0),
+    sources: srcs
+  };
+}
+
+/* ================================================================
+   TAB SYSTEM
+================================================================ */
+let activeTab = 'dashboard';
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('active', p.dataset.tab === tab));
+  document.querySelectorAll('[data-tab]:not(.panel)').forEach(el =>
+    el.classList.toggle('active', el.dataset.tab === tab));
+  renderTab();
+}
+
+function renderTab() {
+  if (activeTab === 'dashboard')   renderDash();
+  if (activeTab === 'income')      renderIncome();
+  if (activeTab === 'allocations') renderAllocs();
+  /* settings tab is pure HTML + synced controls, no render needed */
+}
+
+/* ================================================================
+   BALANCE INPUTS
+================================================================ */
+function setupBalInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  el.addEventListener('focus', () => {
+    el.value = S.balance === 0 ? '' : String(S.balance);
+    el.select();
+  });
+
+  el.addEventListener('blur', () => {
+    const n = parseN(el.value);
+    if (n !== null) { S.balance = n; save(); }
+    syncBalDisplays();
+    if (activeTab === 'allocations') updateAllocDerived();
+    renderDash();
+  });
+
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+  });
+
+  /* Strip non-numeric on input */
+  el.addEventListener('input', () => {
+    let v = el.value.replace(/[^0-9.]/g, '');
+    const dot = v.indexOf('.');
+    if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
+    if (v !== el.value) {
+      const pos = el.selectionStart;
+      el.value = v;
+      el.setSelectionRange(pos, pos);
+    }
+  });
+}
+
+function syncBalDisplays() {
+  const r = rem();
+  const pos = r >= 0;
+  ['sb-bal', 'mb-bal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el !== document.activeElement) el.value = fmt(S.balance);
+  });
+  ['sb-rem', 'mb-rem'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmt(r);
+    el.className = 'rem-val ' + (pos ? 'c-ok' : 'c-bad');
+  });
+}
+
+/* ================================================================
+   DASHBOARD
+================================================================ */
+function renderDash() {
+  syncBalDisplays();
+
+  const over = rem() < 0;
+  const dw = document.getElementById('dash-warn');
+  if (dw) dw.style.display = over ? '' : 'none';
+
+  /* Upcoming income */
+  const uc = document.getElementById('up-container');
+  if (uc) {
+    const up = upcomingIncome();
+    if (up) {
+      const days = daysTo(up.date);
+      const dstr = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+      uc.innerHTML = `<div class="up-strip">
+        <div class="up-eye">Next income &middot; ${fmtDate(up.date)}</div>
+        <div class="up-amt">${fmt(up.total)}</div>
+        <div class="up-sub">${dstr} &middot; ${up.sources.map(s => esc(s.name)).join(', ')}</div>
+      </div>`;
+    } else {
+      uc.innerHTML = '';
+    }
+  }
+
+  /* Allocation summary */
+  const list = document.getElementById('dash-alloc-list');
+  const empty = document.getElementById('dash-empty');
+  const lbl = document.getElementById('dash-alloc-lbl');
+
+  if (!S.allocs.length) {
+    if (list) list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    if (lbl) lbl.style.display = 'none';
+  } else {
+    if (empty) empty.style.display = 'none';
+    if (lbl) lbl.style.display = '';
+    if (list) {
+      list.innerHTML = S.allocs.map(a => {
+        const amt = allocAmt(a);
+        const pct = S.balance > 0 ? Math.min(100, amt / S.balance * 100) : 0;
+        return `<div class="ac">
+          <div class="ac-row">
+            <span class="ac-name">${esc(a.name)}</span>
+            <span class="ac-amt">${fmt(amt)}</span>
+          </div>
+          <div class="bar"><div class="bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+/* ================================================================
+   INCOME
+================================================================ */
+function renderIncome() {
+  const list = document.getElementById('income-list');
+  const empty = document.getElementById('income-empty');
+  if (!list) return;
+
+  if (!S.income.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  list.innerHTML = S.income.map(src => {
+    const nd = nextPay(src.dates || []);
+    const chips = [5, 15, 20].map(d => {
+      const on = (src.dates || []).includes(d);
+      return `<button class="dchip${on ? ' on' : ''}"
+                      onclick="toggleDate('${src.id}',${d})">${d}th</button>`;
+    }).join('');
+
+    return `<div class="li" data-id="${src.id}">
+      <div class="li-hd">
+        <input class="name-in"
+               type="text"
+               value="${esc(src.name)}"
+               placeholder="Source name"
+               onblur="saveIncName('${src.id}',this)"
+               onkeydown="enterBlur(event)" />
+        <button class="delbtn" onclick="delIncome('${src.id}')" title="Delete">
+          ${trashSVG()}
+        </button>
+      </div>
+      <div class="li-fields">
+        <div class="fgrp">
+          <div class="flbl">Expected amount</div>
+          <input class="fin"
+                 type="text"
+                 inputmode="decimal"
+                 value="${src.amount || 0}"
+                 oninput="liveIncAmt('${src.id}',this.value)"
+                 onblur="saveIncAmt('${src.id}',this)"
+                 onkeydown="enterBlur(event)" />
+        </div>
+        <div class="fgrp">
+          <div class="flbl">Next payment</div>
+          <span class="pay-badge">${fmtDate(nd)}</span>
+        </div>
+      </div>
+      <div class="date-chips">
+        <span class="flbl" style="line-height:2.2">Pay dates:</span>
+        ${chips}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addIncome() {
+  S.income.push({ id: uid(), name: 'New source', amount: 0, dates: [5] });
+  save();
+  renderIncome();
+  focusLastName('#income-list');
+}
+
+function saveIncName(id, el) {
+  const src = S.income.find(s => s.id === id);
+  if (!src) return;
+  const v = el.value.trim();
+  src.name = v || 'Unnamed';
+  if (!v) el.value = 'Unnamed';
+  save();
+  /* Refresh upcoming strip on dashboard without touching income list DOM */
+  const uc = document.getElementById('up-container');
+  if (uc) { const up = upcomingIncome(); renderUpcomingInto(uc, up); }
+}
+
+function saveIncAmt(id, el) {
+  const src = S.income.find(s => s.id === id);
+  if (!src) return;
+  const n = parseN(el.value);
+  if (n !== null) { src.amount = n; el.value = n; }
+  else el.value = src.amount;
+  save();
+  const uc = document.getElementById('up-container');
+  if (uc) { renderUpcomingInto(uc, upcomingIncome()); }
+}
+
+function liveIncAmt(id, raw) {
+  const src = S.income.find(s => s.id === id);
+  if (!src) return;
+  const n = parseN(raw);
+  if (n !== null) { src.amount = n; save(); }
+  const uc = document.getElementById('up-container');
+  if (uc) { renderUpcomingInto(uc, upcomingIncome()); }
+}
+
+function renderUpcomingInto(container, up) {
+  if (!up) { container.innerHTML = ''; return; }
+  const days = daysTo(up.date);
+  const dstr = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+  container.innerHTML = `<div class="up-strip">
+    <div class="up-eye">Next income &middot; ${fmtDate(up.date)}</div>
+    <div class="up-amt">${fmt(up.total)}</div>
+    <div class="up-sub">${dstr} &middot; ${up.sources.map(s => esc(s.name)).join(', ')}</div>
+  </div>`;
+}
+
+function toggleDate(id, date) {
+  const src = S.income.find(s => s.id === id);
+  if (!src) return;
+  src.dates = src.dates || [];
+  const i = src.dates.indexOf(date);
+  if (i === -1) src.dates.push(date); else src.dates.splice(i, 1);
+  save();
+  renderIncome();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+function delIncome(id) {
+  S.income = S.income.filter(s => s.id !== id);
+  save();
+  renderIncome();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+/* ================================================================
+   ALLOCATIONS
+================================================================ */
+function renderAllocs() {
+  const list = document.getElementById('alloc-list');
+  const empty = document.getElementById('alloc-empty');
+  if (!list) return;
+
+  updateAllocDerived();
+
+  if (!S.allocs.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  list.innerHTML = S.allocs.map(a => {
+    const amt = allocAmt(a);
+    const hint = a.type === 'pct'
+      ? `<div class="pct-hint">= ${fmt(amt)} of your ${fmt(S.balance)} balance</div>`
+      : '';
+
+    return `<div class="li" data-id="${a.id}">
+      <div class="li-hd">
+        <input class="name-in"
+               type="text"
+               value="${esc(a.name)}"
+               placeholder="Allocation name"
+               onblur="saveAllocName('${a.id}',this)"
+               onkeydown="enterBlur(event)" />
+        <button class="delbtn" onclick="delAlloc('${a.id}')" title="Delete">
+          ${trashSVG()}
+        </button>
+      </div>
+      <div class="li-fields">
+        <div class="fgrp">
+          <div class="flbl">Type</div>
+          <div class="tt">
+            <button class="tt-btn${a.type==='fixed'?' on':''}"
+                    onclick="setAllocType('${a.id}','fixed')">${S.cfg.cur} Fixed</button>
+            <button class="tt-btn${a.type==='pct'?' on':''}"
+                    onclick="setAllocType('${a.id}','pct')">% Balance</button>
+          </div>
+        </div>
+        <div class="fgrp">
+          <div class="flbl">${a.type === 'fixed' ? 'Amount' : 'Percentage'}</div>
+          <input class="fin"
+                 type="text"
+                 inputmode="decimal"
+                 value="${a.value || 0}"
+                 onblur="saveAllocVal('${a.id}',this)"
+                 oninput="liveAlloc('${a.id}',this.value)"
+                 onkeydown="enterBlur(event)" />
+        </div>
+      </div>
+      ${hint}
+    </div>`;
+  }).join('');
+}
+
+function addAlloc() {
+  S.allocs.push({ id: uid(), name: 'New allocation', type: 'fixed', value: 0 });
+  save();
+  renderAllocs();
+  focusLastName('#alloc-list');
+}
+
+function saveAllocName(id, el) {
+  const a = S.allocs.find(x => x.id === id);
+  if (!a) return;
+  const v = el.value.trim();
+  a.name = v || 'Unnamed';
+  if (!v) el.value = 'Unnamed';
+  save();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+function saveAllocVal(id, el) {
+  const a = S.allocs.find(x => x.id === id);
+  if (!a) return;
+  const n = parseN(el.value);
+  if (n !== null) {
+    a.value = a.type === 'pct' ? Math.min(100, n) : n;
+    el.value = a.value;
+  } else {
+    el.value = a.value;
+  }
+  save();
+  syncBalDisplays();
+  updateAllocDerived();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+function liveAlloc(id, raw) {
+  /* Update derived displays without touching the DOM list — prevents focus loss */
+  const a = S.allocs.find(x => x.id === id);
+  if (!a) return;
+  const n = parseN(raw);
+  if (n !== null) {
+    a.value = a.type === 'pct' ? Math.min(100, n) : n;
+    save();
+  }
+  syncBalDisplays();
+  updateAllocDerived();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+function setAllocType(id, type) {
+  const a = S.allocs.find(x => x.id === id);
+  if (!a) return;
+  a.type = type;
+  save();
+  renderAllocs(); /* safe: user clicked a button, not inside an input */
+  syncBalDisplays();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+function delAlloc(id) {
+  S.allocs = S.allocs.filter(x => x.id !== id);
+  save();
+  renderAllocs();
+  syncBalDisplays();
+  if (activeTab === 'dashboard') renderDash();
+}
+
+function updateAllocDerived() {
+  const total = totalAlloc();
+  const r = rem();
+  const over = r < 0;
+
+  const warnEl = document.getElementById('alloc-warn');
+  if (warnEl) warnEl.style.display = over ? '' : 'none';
+
+  const subEl = document.getElementById('alloc-sub');
+  if (subEl) {
+    subEl.textContent = fmt(total);
+    subEl.className = 'sub-val ' + (over ? 'c-bad' : 'c-ok');
+  }
+}
+
+/* ================================================================
+   SETTINGS
+================================================================ */
+function syncCfgUI() {
+  ['dm-d','dm-m'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = S.cfg.dark;
+  });
+  ['cur-d','cur-m'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = S.cfg.cur;
+  });
+}
+
+function setDark(on) {
+  S.cfg.dark = on;
+  applyDark();
+  save();
+  syncCfgUI();
+}
+
+function applyDark() {
+  document.documentElement.setAttribute('data-theme', S.cfg.dark ? 'dark' : 'light');
+  const mt = document.getElementById('meta-theme');
+  if (mt) mt.content = S.cfg.dark ? '#161923' : '#ffffff';
+}
+
+function setCur(sym) {
+  S.cfg.cur = sym;
+  save();
+  syncCfgUI();
+  syncBalDisplays();
+  renderTab();
+}
+
+/* ================================================================
+   RESET DIALOG
+================================================================ */
+function openReset()  { document.getElementById('overlay').classList.add('open'); }
+function closeReset() { document.getElementById('overlay').classList.remove('open'); }
+function overlayClick(e) { if (e.target === e.currentTarget) closeReset(); }
+
+function doReset() {
+  S = clone(DFLT);
+  save();
+  closeReset();
+  applyDark();
+  syncCfgUI();
+  syncBalDisplays();
+  renderDash();
+  renderTab();
+}
+
+/* ================================================================
+   HELPERS
+================================================================ */
+function enterBlur(e) { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }
+
+function focusLastName(selector) {
+  setTimeout(() => {
+    const items = document.querySelectorAll(selector + ' .li');
+    const last = items[items.length - 1];
+    if (!last) return;
+    const inp = last.querySelector('.name-in');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 30);
+}
+
+function trashSVG() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14H6L5 6"/>
+    <path d="M10 11v6M14 11v6"/>
+    <path d="M9 6V4h6v2"/>
+  </svg>`;
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+(function init() {
+  load();
+  applyDark();
+  syncCfgUI();
+  setupBalInput('sb-bal');
+  setupBalInput('mb-bal');
+  syncBalDisplays();
+  renderDash();
+  /* Income and allocs rendered when their tab is first opened */
+})();
+</script>
+</body>
+</html>
